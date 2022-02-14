@@ -1,0 +1,55 @@
+main:
+  steps:
+    - init:
+        assign:
+        - project_id: "cliu201"        
+        - single_file_name: "000000000000.csv"
+        - query: "select * from `cliu201.ds201.Persons`"
+        - bucket: "cliu201-bucket"
+        - prefix: "workflow/"
+        - sql_instance: "cliu"
+        - sql_database: "run_mysql"
+        - table: "Persons"
+    - bq_export:
+        call: googleapis.bigquery.v2.jobs.query
+        args:
+          projectId: ${project_id}
+          body:
+            query: ${"EXPORT DATA OPTIONS(uri='gs://" + bucket + "/" +  prefix + "*.csv',format='CSV',overwrite=true) AS " + query}
+            useLegacySql: false 
+    - sql_Import:
+        call: http.post
+        args:
+          url: ${"https://sqladmin.googleapis.com/v1/projects/" + project_id + "/instances/" + sql_instance + "/import"}
+          auth:
+            type: OAuth2
+          body:
+            importContext:
+              uri: ${"gs://" + bucket + "/" + prefix + single_file_name}
+              database: ${sql_database}
+              fileType: CSV
+              csvImportOptions:
+                table: ${table}
+        result: operation
+    - chekoperation:
+        switch:
+          - condition: ${operation.body.status != "DONE"}
+            next: wait
+        next: completed
+    - completed:
+        return: "Done"
+    - wait:
+        call: sys.sleep
+        args:
+          seconds: 1
+        next: getoperation
+    - getoperation:
+        call: http.get
+        args:
+          url: ${operation.body.selfLink}
+          auth:
+            type: OAuth2
+        result: operation
+        next: chekoperation
+
+
