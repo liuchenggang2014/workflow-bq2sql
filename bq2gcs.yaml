@@ -1,0 +1,38 @@
+main:
+  steps:
+    - init:
+        assign:
+        - project_id: "cliu201"        
+        - query: "SELECT * FROM
+                  `cliu201.CND.CND` as a
+                  where
+                  TIMESTAMP_DIFF(current_timestamp(), a.EventTime, DAY) > 90"
+        - bucket: "cliu201-us"
+        - prefix: "zulong/zulong_*.avro"
+        - dataset: "ds201"
+        - table: "www"
+    - bq_export:
+        call: googleapis.bigquery.v2.jobs.query
+        args:
+          projectId: ${project_id}
+          body:
+            query: ${"EXPORT DATA OPTIONS(uri='gs://" + bucket + "/" +  prefix + "',format='AVRO', compression='SNAPPY', overwrite=true) AS " + query}
+            useLegacySql: false 
+    - bq_external_table:
+        call: googleapis.bigquery.v2.tables.insert
+        args:
+          projectId: ${project_id}
+          datasetId: ${dataset}
+          body:
+            tableReference: 
+              projectId: ${project_id}
+              datasetId: ${dataset}
+              tableId: ${table}
+            externalDataConfiguration:
+              sourceFormat: AVRO
+              sourceUris: [${"gs://" + bucket + "/" + prefix}]
+              AvroOptions:
+                useAvroLogicalTypes: true
+        # return: table.tableReference.tableId
+
+
